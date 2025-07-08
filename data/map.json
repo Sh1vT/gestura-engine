@@ -1,10 +1,10 @@
 [
   {
-    "sign": "palmOpen",
-    "action": "pause"
+    "sign": "thumbsUp",
+    "action": "fullScreen"
   },
   {
-    "sign": "one",
-    "action": "sendMail"
+    "sign": "palmOpen",
+    "action": "switch"
   }
 ]

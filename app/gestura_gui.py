@@ -307,16 +307,34 @@ if not os.path.exists(MODULES_DIR):
     os.makedirs(MODULES_DIR)
 
 # --- Utility: Load and merge from modules ---
-def load_all_module_data():
+def get_available_modules_list():
+    return [name for name in os.listdir(MODULES_DIR) if os.path.isdir(os.path.join(MODULES_DIR, name))]
+
+def load_all_module_data(active_modules=None):
     gesture_dict = {}
     actions = []
     mappings = []
     # Always load gestures from the main data/gestures.json
     if os.path.exists("data/gestures.json"):
         gesture_dict.update(load_gesture_data("data/gestures.json"))
-    # Load from all modules
+    # Always load actions from the main data/actions.json
+    if os.path.exists("data/actions.json"):
+        try:
+            with open("data/actions.json", "r") as f:
+                actions.extend(json.load(f))
+        except Exception as e:
+            print(f"[Data Load] Error loading actions from data/actions.json: {e}")
+    # Always load mappings from the main data/map.json
+    if os.path.exists("data/map.json"):
+        try:
+            with open("data/map.json", "r") as f:
+                mappings.extend(json.load(f))
+        except Exception as e:
+            print(f"[Data Load] Error loading mappings from data/map.json: {e}")
+    # Load from selected modules (or all if not specified)
     if os.path.exists(MODULES_DIR):
-        for mod in os.listdir(MODULES_DIR):
+        modules_to_load = active_modules if active_modules is not None else os.listdir(MODULES_DIR)
+        for mod in modules_to_load:
             mod_path = os.path.join(MODULES_DIR, mod)
             if not os.path.isdir(mod_path):
                 continue
@@ -346,7 +364,9 @@ def load_all_module_data():
     return gesture_dict, actions, mappings
 
 # --- Use merged data from modules ---
-gesture_dict, actions, mappings = load_all_module_data()
+# On startup, load all modules (default: all enabled)
+all_modules_startup = get_available_modules_list()
+gesture_dict, actions, mappings = load_all_module_data(all_modules_startup)
 
 # Update all update_* functions to use the new globals (already done, just ensure they use gesture_dict/actions/mappings)
 frame_sequence = ["start", "mid1", "mid2", "end"]
@@ -552,10 +572,6 @@ def unmap_sign():
     save_mappings()
 
 # --- Module Import/Export UI ---
-def get_available_modules():
-    return [name for name in os.listdir(MODULES_DIR) if os.path.isdir(os.path.join(MODULES_DIR, name))]
-
-# --- Export logic (stub) ---
 def export_selected_modules():
     import os
     import shutil
@@ -651,7 +667,7 @@ def import_modules():
 # --- Tkinter UI ---
 root = tk.Tk()
 root.title("Gestura - ISL Interpreter")
-root.geometry("500x700")
+root.geometry("600x900")
 
 notebook = ttk.Notebook(root)
 notebook.pack(fill=tk.BOTH, expand=True)
@@ -681,6 +697,35 @@ notebook.add(sign_manager_frame, text="Sign Manager")
 # --- All Signs Section ---
 signs_frame = ttk.LabelFrame(sign_manager_frame, text="All Signs")
 signs_frame.pack(fill=tk.X, padx=20, pady=(15, 5))
+
+# --- Modules Subsection (for activation) ---
+modules_select_frame = ttk.LabelFrame(signs_frame, text="Modules")
+modules_select_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+
+active_module_vars = {}
+active_module_checkboxes = []
+
+def on_active_modules_changed():
+    # Get checked modules
+    active_modules = [mod for mod, var in active_module_vars.items() if var.get()]
+    # Reload data from only checked modules (plus main data)
+    global gesture_dict, actions, mappings
+    gesture_dict, actions, mappings = load_all_module_data(active_modules)
+    update_all_lists()
+
+def refresh_active_module_checkboxes():
+    for cb in active_module_checkboxes:
+        cb.destroy()
+    active_module_checkboxes.clear()
+    active_module_vars.clear()
+    modules = get_available_modules_list()
+    for mod in modules:
+        var = tk.BooleanVar(value=False)  # Default: all unchecked
+        cb = tk.Checkbutton(modules_select_frame, text=mod, variable=var, command=on_active_modules_changed)
+        cb.pack(anchor="w")
+        active_module_vars[mod] = var
+        active_module_checkboxes.append(cb)
+    on_active_modules_changed()  # Ensure data matches UI at startup
 
 sign_listbox = tk.Listbox(signs_frame, width=40, height=8)
 sign_listbox.pack(fill=tk.X, padx=10, pady=(10, 10))
@@ -738,7 +783,7 @@ def refresh_module_checkboxes():
         cb.destroy()
     module_checkboxes.clear()
     module_vars.clear()
-    modules = get_available_modules()
+    modules = get_available_modules_list()
     for mod in modules:
         var = tk.BooleanVar()
         cb = tk.Checkbutton(module_export_frame, text=mod, variable=var)
@@ -768,6 +813,9 @@ def update_all_lists():
     update_action_listbox()
     update_mapping_dropdowns()
     update_mapping_listbox()
+    # refresh_active_module_checkboxes()  # Removed to prevent checkbox reset on every reload
+
+refresh_active_module_checkboxes()  # Call after all functions are defined
 
 print("Loaded actions:", actions)
 print("Loaded mappings:", mappings)
