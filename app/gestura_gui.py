@@ -229,7 +229,7 @@ def poll_recognition_queue():
 
 # --- Globals and State ---
 import os
-GESTURE_FILE = "backend/gestures.json"
+GESTURE_FILE = "data/gestures.json"
 gesture_dict = load_gesture_data(GESTURE_FILE)
 frame_sequence = ["start", "mid1", "mid2", "end"]
 keypoints_to_check = [0, 1, 4, 5, 8, 9, 12, 13, 16, 17, 20]
@@ -244,10 +244,63 @@ running = False
 
 camera_in_use = False
 
+# --- In-memory Actions and Mappings ---
+actions = []  # List of dicts: {"name": ...}
+mappings = []  # List of dicts: {"sign": ..., "action": ...}
+
+def add_action():
+    name = simpledialog.askstring("Add Action", "Enter action name:")
+    if name:
+        actions.append({"name": name})
+        update_action_listbox()
+        update_mapping_dropdowns()
+
+def delete_action():
+    sel = action_listbox.curselection()
+    if sel:
+        idx = sel[0]
+        actions.pop(idx)
+        update_action_listbox()
+        update_mapping_dropdowns()
+        update_mapping_listbox()
+
+def update_action_listbox():
+    action_listbox.delete(0, tk.END)
+    for a in actions:
+        action_listbox.insert(tk.END, a["name"])
+
+def update_mapping_dropdowns():
+    sign_dropdown['values'] = list(gesture_dict.keys())
+    action_dropdown['values'] = [a["name"] for a in actions]
+    if gesture_dict:
+        sign_dropdown.current(0)
+    if actions:
+        action_dropdown.current(0)
+
+def update_mapping_listbox():
+    mapping_listbox.delete(0, tk.END)
+    for m in mappings:
+        mapping_listbox.insert(tk.END, f"{m['sign']} → {m['action']}")
+
+def map_sign_to_action():
+    sign = sign_var.get()
+    action = action_var.get()
+    if sign and action:
+        global mappings
+        mappings = [m for m in mappings if m["sign"] != sign]
+        mappings.append({"sign": sign, "action": action})
+        update_mapping_listbox()
+
+def unmap_sign():
+    sign = sign_var.get()
+    global mappings
+    mappings = [m for m in mappings if m["sign"] != sign]
+    update_mapping_listbox()
+
 # --- Tkinter UI ---
 root = tk.Tk()
 root.title("Gestura - ISL Interpreter")
-root.geometry("600x400")
+root.geometry("600x500")
 
 notebook = ttk.Notebook(root)
 notebook.pack(fill=tk.BOTH, expand=True)
@@ -255,27 +308,81 @@ notebook.pack(fill=tk.BOTH, expand=True)
 # Recognition Tab
 recog_frame = ttk.Frame(notebook)
 notebook.add(recog_frame, text="Recognition")
-recog_signs_label = tk.Label(recog_frame, text="Recognized Signs:")
-recog_signs_label.pack()
-detected_signs_listbox = tk.Listbox(recog_frame, width=40, height=8)
-detected_signs_listbox.pack(pady=5)
-recog_start_button = ttk.Button(recog_frame, text="Start Recognition", command=start_recognition)
-recog_start_button.pack(side=tk.LEFT, padx=20, pady=10)
-recog_stop_button = ttk.Button(recog_frame, text="Stop Recognition", command=stop_recognition, state=tk.DISABLED)
-recog_stop_button.pack(side=tk.LEFT, padx=20, pady=10)
 
-# Sign Manager Tab
+# --- Recognized Signs Section ---
+recog_signs_frame = ttk.LabelFrame(recog_frame, text="Recognized Signs")
+recog_signs_frame.pack(fill=tk.X, padx=20, pady=(15, 5))
+
+detected_signs_listbox = tk.Listbox(recog_signs_frame, width=40, height=8)
+detected_signs_listbox.pack(fill=tk.X, padx=10, pady=(10, 10))
+
+recog_btn_frame = ttk.Frame(recog_signs_frame)
+recog_btn_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+recog_start_button = ttk.Button(recog_btn_frame, text="Start Recognition", command=start_recognition)
+recog_start_button.pack(side=tk.LEFT, padx=(0, 10))
+recog_stop_button = ttk.Button(recog_btn_frame, text="Stop Recognition", command=stop_recognition, state=tk.DISABLED)
+recog_stop_button.pack(side=tk.LEFT)
+
+# Sign Manager Tab (refactored layout)
 sign_manager_frame = ttk.Frame(notebook)
 notebook.add(sign_manager_frame, text="Sign Manager")
-sign_list_label = tk.Label(sign_manager_frame, text="All Signs:")
-sign_list_label.pack()
-sign_listbox = tk.Listbox(sign_manager_frame, width=40, height=12)
-sign_listbox.pack(pady=5)
-add_sign_button = ttk.Button(sign_manager_frame, text="Add Sign", command=add_sign)
-add_sign_button.pack(side=tk.LEFT, padx=20, pady=10)
-delete_sign_button = ttk.Button(sign_manager_frame, text="Delete Sign", command=delete_sign)
-delete_sign_button.pack(side=tk.LEFT, padx=20, pady=10)
 
-update_sign_listbox()
+# --- All Signs Section ---
+signs_frame = ttk.LabelFrame(sign_manager_frame, text="All Signs")
+signs_frame.pack(fill=tk.X, padx=20, pady=(15, 5))
+
+sign_listbox = tk.Listbox(signs_frame, width=40, height=8)
+sign_listbox.pack(fill=tk.X, padx=10, pady=(10, 10))
+
+sign_btn_frame = ttk.Frame(signs_frame)
+sign_btn_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+add_sign_button = ttk.Button(sign_btn_frame, text="Add Sign", command=add_sign)
+add_sign_button.pack(side=tk.LEFT, padx=(0, 10))
+delete_sign_button = ttk.Button(sign_btn_frame, text="Delete Sign", command=delete_sign)
+delete_sign_button.pack(side=tk.LEFT)
+
+# --- Actions Section ---
+action_frame = ttk.LabelFrame(sign_manager_frame, text="Actions")
+action_frame.pack(fill=tk.X, padx=20, pady=(5, 5))
+
+action_listbox = tk.Listbox(action_frame, width=30, height=6)
+action_listbox.pack(fill=tk.X, padx=10, pady=(10, 10))
+
+action_btn_frame = ttk.Frame(action_frame)
+action_btn_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+add_action_btn = ttk.Button(action_btn_frame, text="Add", command=add_action)
+add_action_btn.pack(side=tk.LEFT, padx=(0, 10))
+delete_action_btn = ttk.Button(action_btn_frame, text="Delete", command=delete_action)
+delete_action_btn.pack(side=tk.LEFT)
+
+# --- Mappings Section ---
+mapping_frame = ttk.LabelFrame(sign_manager_frame, text="Mappings")
+mapping_frame.pack(fill=tk.X, padx=20, pady=(5, 15))
+
+mapping_listbox = tk.Listbox(mapping_frame, width=40, height=6)
+mapping_listbox.pack(fill=tk.X, padx=10, pady=(10, 10))
+
+mapping_dropdown_frame = ttk.Frame(mapping_frame)
+mapping_dropdown_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+sign_var = tk.StringVar()
+action_var = tk.StringVar()
+sign_dropdown = ttk.Combobox(mapping_dropdown_frame, textvariable=sign_var, state="readonly", width=18)
+sign_dropdown.pack(side=tk.LEFT, padx=(0, 10))
+action_dropdown = ttk.Combobox(mapping_dropdown_frame, textvariable=action_var, state="readonly", width=18)
+action_dropdown.pack(side=tk.LEFT, padx=(0, 10))
+map_btn = ttk.Button(mapping_dropdown_frame, text="Map", command=map_sign_to_action)
+map_btn.pack(side=tk.LEFT, padx=(0, 10))
+unmap_btn = ttk.Button(mapping_dropdown_frame, text="Unmap", command=unmap_sign)
+unmap_btn.pack(side=tk.LEFT)
+
+# --- Update all lists on startup and after changes ---
+def update_all_lists():
+    update_sign_listbox()
+    update_action_listbox()
+    update_mapping_dropdowns()
+    update_mapping_listbox()
+
+update_all_lists()
+
 root.after(100, poll_recognition_queue)
 root.mainloop() 
