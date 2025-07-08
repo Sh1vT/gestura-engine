@@ -300,7 +300,7 @@ def unmap_sign():
 # --- Tkinter UI ---
 root = tk.Tk()
 root.title("Gestura - ISL Interpreter")
-root.geometry("600x500")
+root.geometry("500x700")
 
 notebook = ttk.Notebook(root)
 notebook.pack(fill=tk.BOTH, expand=True)
