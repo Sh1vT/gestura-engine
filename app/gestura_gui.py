@@ -9,6 +9,9 @@ import threading
 import subprocess
 import queue
 import pyautogui
+import shutil
+import zipfile
+import tempfile
 recognition_proc = None
 recognition_queue = queue.Queue()
 recognition_thread = None
@@ -67,9 +70,10 @@ def add_sign():
         time.sleep(1)
         cv2.destroyAllWindows()
         print("[Main App] Called cv2.destroyAllWindows() after subprocess.")
-        # After subprocess, reload gesture_dict and update list
-        gesture_dict = load_gesture_data(GESTURE_FILE)
-        update_sign_listbox()
+        # After subprocess, reload all modules
+        global actions, mappings
+        gesture_dict, actions, mappings = load_all_module_data()
+        update_all_lists()
         messagebox.showinfo("Success", f"Sign '{sign_name}' added.")
     except subprocess.CalledProcessError:
         messagebox.showerror("Error", f"Failed to add sign '{sign_name}'. See terminal for details.")
@@ -80,9 +84,18 @@ def delete_sign():
         return
     sign_name = sign_listbox.get(selection[0])
     if messagebox.askyesno("Delete Sign", f"Are you sure you want to delete '{sign_name}'?"):
-        gesture_dict.pop(sign_name, None)
-        save_gesture_data(GESTURE_FILE, gesture_dict)
-        update_sign_listbox()
+        # Remove from data/gestures.json
+        gestures_path = os.path.join("data", "gestures.json")
+        if os.path.exists(gestures_path):
+            with open(gestures_path, "r") as f:
+                gestures = json.load(f)
+            gestures.pop(sign_name, None)
+            with open(gestures_path, "w") as f:
+                json.dump(gestures, f, indent=2)
+        # Reload all modules
+        global gesture_dict, actions, mappings
+        gesture_dict, actions, mappings = load_all_module_data()
+        update_all_lists()
         messagebox.showinfo("Deleted", f"Sign '{sign_name}' deleted.")
 
 def update_sign_listbox():
@@ -289,7 +302,53 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ACTIONS_FILE = os.path.join(BASE_DIR, "../data/actions.json")
 MAPPINGS_FILE = os.path.join(BASE_DIR, "../data/map.json")
 GESTURE_FILE = "data/gestures.json"
-gesture_dict = load_gesture_data(GESTURE_FILE)
+MODULES_DIR = os.path.join(BASE_DIR, '../modules')
+if not os.path.exists(MODULES_DIR):
+    os.makedirs(MODULES_DIR)
+
+# --- Utility: Load and merge from modules ---
+def load_all_module_data():
+    gesture_dict = {}
+    actions = []
+    mappings = []
+    # Always load gestures from the main data/gestures.json
+    if os.path.exists("data/gestures.json"):
+        gesture_dict.update(load_gesture_data("data/gestures.json"))
+    # Load from all modules
+    if os.path.exists(MODULES_DIR):
+        for mod in os.listdir(MODULES_DIR):
+            mod_path = os.path.join(MODULES_DIR, mod)
+            if not os.path.isdir(mod_path):
+                continue
+            # Gestures
+            gfile = os.path.join(mod_path, "gestures.json")
+            if os.path.exists(gfile):
+                gdata = load_gesture_data(gfile)
+                gesture_dict.update(gdata)
+            # Actions
+            afile = os.path.join(mod_path, "actions.json")
+            if os.path.exists(afile):
+                try:
+                    with open(afile, "r") as f:
+                        adata = json.load(f)
+                        actions.extend(adata)
+                except Exception as e:
+                    print(f"[Module Load] Error loading actions from {afile}: {e}")
+            # Mappings
+            mfile = os.path.join(mod_path, "map.json")
+            if os.path.exists(mfile):
+                try:
+                    with open(mfile, "r") as f:
+                        mdata = json.load(f)
+                        mappings.extend(mdata)
+                except Exception as e:
+                    print(f"[Module Load] Error loading mappings from {mfile}: {e}")
+    return gesture_dict, actions, mappings
+
+# --- Use merged data from modules ---
+gesture_dict, actions, mappings = load_all_module_data()
+
+# Update all update_* functions to use the new globals (already done, just ensure they use gesture_dict/actions/mappings)
 frame_sequence = ["start", "mid1", "mid2", "end"]
 keypoints_to_check = [0, 1, 4, 5, 8, 9, 12, 13, 16, 17, 20]
 detected_words = []
@@ -492,6 +551,103 @@ def unmap_sign():
     update_mapping_listbox()
     save_mappings()
 
+# --- Module Import/Export UI ---
+def get_available_modules():
+    return [name for name in os.listdir(MODULES_DIR) if os.path.isdir(os.path.join(MODULES_DIR, name))]
+
+# --- Export logic (stub) ---
+def export_selected_modules():
+    import os
+    import shutil
+    import zipfile
+    import tempfile
+    selected_modules = [mod for mod, var in module_vars.items() if var.get()]
+    include_data = include_data_var.get()
+    data_module_name = data_module_name_var.get().strip()
+    if not selected_modules and not include_data:
+        messagebox.showerror("Export", "No modules selected for export.")
+        return
+    # Create temp dir
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Copy selected modules
+        for mod in selected_modules:
+            src = os.path.join("modules", mod)
+            dst = os.path.join(temp_dir, mod)
+            if os.path.isdir(src):
+                shutil.copytree(src, dst)
+        # Optionally include data as a module
+        if include_data and data_module_name:
+            data_dst = os.path.join(temp_dir, data_module_name)
+            os.makedirs(data_dst, exist_ok=True)
+            for fname in ["gestures.json", "actions.json", "map.json"]:
+                src = os.path.join("data", fname)
+                if os.path.exists(src):
+                    shutil.copy2(src, os.path.join(data_dst, fname))
+        # Ask user for save location
+        zip_path = filedialog.asksaveasfilename(
+            defaultextension=".zip",
+            filetypes=[("Zip files", "*.zip")],
+            title="Export Modules As Zip"
+        )
+        if not zip_path:
+            return
+        # Zip contents
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+            for root, dirs, files in os.walk(temp_dir):
+                for file in files:
+                    abs_path = os.path.join(root, file)
+                    rel_path = os.path.relpath(abs_path, temp_dir)
+                    zipf.write(abs_path, rel_path)
+        messagebox.showinfo("Export", f"Exported to {zip_path}")
+
+
+def import_modules():
+    import os
+    import shutil
+    import zipfile
+    import tempfile
+    # Ask user for zip file
+    zip_path = filedialog.askopenfilename(
+        filetypes=[("Zip files", "*.zip")],
+        title="Import Modules Zip"
+    )
+    if not zip_path:
+        return
+    with tempfile.TemporaryDirectory() as temp_dir:
+        with zipfile.ZipFile(zip_path, "r") as zipf:
+            zipf.extractall(temp_dir)
+        # For each folder in temp_dir, copy to modules/
+        for item in os.listdir(temp_dir):
+            src = os.path.join(temp_dir, item)
+            dst = os.path.join("modules", item)
+            if os.path.isdir(src):
+                if os.path.exists(dst):
+                    # Prompt user for conflict resolution
+                    resp = messagebox.askquestion(
+                        "Module Conflict",
+                        f"Module '{item}' already exists. Overwrite? (Yes = Overwrite, No = Skip, Cancel = Rename)",
+                        icon='warning'
+                    )
+                    if resp == 'yes':
+                        shutil.rmtree(dst)
+                        shutil.copytree(src, dst)
+                    elif resp == 'no':
+                        continue
+                    else:  # Cancel = Rename
+                        # Ask for new name
+                        new_name = simpledialog.askstring("Rename Module", f"Enter new name for imported module '{item}':")
+                        if not new_name:
+                            continue
+                        new_dst = os.path.join("modules", new_name)
+                        if os.path.exists(new_dst):
+                            messagebox.showerror("Import", f"Module '{new_name}' already exists. Skipping.")
+                            continue
+                        shutil.copytree(src, new_dst)
+                else:
+                    shutil.copytree(src, dst)
+        refresh_module_checkboxes()
+        messagebox.showinfo("Import", "Import complete.")
+
 # --- Tkinter UI ---
 root = tk.Tk()
 root.title("Gestura - ISL Interpreter")
@@ -569,6 +725,42 @@ map_btn = ttk.Button(mapping_dropdown_frame, text="Map", command=map_sign_to_act
 map_btn.pack(side=tk.LEFT, padx=(0, 10))
 unmap_btn = ttk.Button(mapping_dropdown_frame, text="Unmap", command=unmap_sign)
 unmap_btn.pack(side=tk.LEFT)
+
+# --- Module Import/Export UI (moved here) ---
+module_export_frame = ttk.LabelFrame(sign_manager_frame, text="Module Import/Export")
+module_export_frame.pack(fill=tk.X, padx=20, pady=(10, 5))
+
+# Module selection
+module_vars = {}
+module_checkboxes = []
+def refresh_module_checkboxes():
+    for cb in module_checkboxes:
+        cb.destroy()
+    module_checkboxes.clear()
+    module_vars.clear()
+    modules = get_available_modules()
+    for mod in modules:
+        var = tk.BooleanVar()
+        cb = tk.Checkbutton(module_export_frame, text=mod, variable=var)
+        cb.pack(anchor="w")
+        module_vars[mod] = var
+        module_checkboxes.append(cb)
+refresh_module_checkboxes()
+
+# Option to include current data folder as a module
+include_data_var = tk.BooleanVar()
+data_module_name_var = tk.StringVar(value="my_custom_module")
+data_cb = tk.Checkbutton(module_export_frame, text="Include current data folder as module:", variable=include_data_var)
+data_cb.pack(anchor="w")
+data_name_entry = tk.Entry(module_export_frame, textvariable=data_module_name_var, width=20)
+data_name_entry.pack(anchor="w", padx=30)
+
+# Export button
+export_btn = ttk.Button(module_export_frame, text="Export Selected Modules", command=lambda: export_selected_modules())
+export_btn.pack(side=tk.LEFT, padx=(10, 10), pady=10)
+# Import button
+import_btn = ttk.Button(module_export_frame, text="Import Modules", command=lambda: import_modules())
+import_btn.pack(side=tk.LEFT, padx=(0, 10), pady=10)
 
 # --- Update all lists on startup and after changes ---
 def update_all_lists():
