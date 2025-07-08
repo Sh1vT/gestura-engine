@@ -1,0 +1,5 @@
+dearpygui>=1.10.1
+opencv-python
+mediapipe
+numpy 
+fastdtw
