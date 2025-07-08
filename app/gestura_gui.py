@@ -4,10 +4,11 @@ import mediapipe as mp
 import json
 import time
 import tkinter as tk
-from tkinter import ttk, simpledialog, messagebox
+from tkinter import ttk, simpledialog, messagebox, filedialog
 import threading
 import subprocess
 import queue
+import pyautogui
 recognition_proc = None
 recognition_queue = queue.Queue()
 recognition_thread = None
@@ -225,10 +226,68 @@ def poll_recognition_queue():
         sign = recognition_queue.get()
         detected_words.append(sign)
         update_detected_signs_listbox()
+        execute_action_for_sign(sign)
     root.after(100, poll_recognition_queue)
+
+def execute_action_for_sign(sign):
+    # Find mapping
+    mapped = next((m for m in mappings if m["sign"] == sign), None)
+    if not mapped:
+        return
+    action = next((a for a in actions if a["name"] == mapped["action"]), None)
+    if not action:
+        return
+    action_type = action.get("type")
+    params = action.get("params", {})
+    if action_type == "macro":
+        keys = params.get("keys", "")
+        if keys:
+            try:
+                # pyautogui expects keys as a list, split on +
+                key_list = [k.strip() for k in keys.split("+")]
+                pyautogui.hotkey(*key_list)
+            except Exception as e:
+                messagebox.showerror("Macro Error", f"Failed to execute macro: {e}")
+    elif action_type == "log":
+        logfile = params.get("logfile")
+        tracked_signs = params.get("signs", [])
+        threshold = params.get("threshold", 1)
+        if logfile and sign in tracked_signs:
+            import datetime
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            try:
+                # Count occurrences so far
+                count = 0
+                try:
+                    with open(logfile, "r") as f:
+                        lines = f.readlines()
+                        count = sum(1 for line in lines if sign in line)
+                except FileNotFoundError:
+                    pass
+                # Write log
+                with open(logfile, "a") as f:
+                    f.write(f"{timestamp} - {sign}\n")
+                # If threshold reached, write at top
+                if count + 1 >= threshold:
+                    with open(logfile, "r+") as f:
+                        content = f.read()
+                        f.seek(0, 0)
+                        f.write(f"Threshold reached for {sign}\n" + content)
+            except Exception as e:
+                messagebox.showerror("Log Error", f"Failed to log sign: {e}")
+    elif action_type == "function":
+        code = params.get("code", "")
+        if code:
+            try:
+                exec(code, {"sign": sign})
+            except Exception as e:
+                messagebox.showerror("Function Error", f"Error in user function: {e}")
 
 # --- Globals and State ---
 import os
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ACTIONS_FILE = os.path.join(BASE_DIR, "../data/actions.json")
+MAPPINGS_FILE = os.path.join(BASE_DIR, "../data/map.json")
 GESTURE_FILE = "data/gestures.json"
 gesture_dict = load_gesture_data(GESTURE_FILE)
 frame_sequence = ["start", "mid1", "mid2", "end"]
@@ -244,18 +303,149 @@ running = False
 
 camera_in_use = False
 
+# --- Persistent Actions and Mappings ---
+def load_actions():
+    if os.path.exists(ACTIONS_FILE):
+        with open(ACTIONS_FILE, "r") as f:
+            return json.load(f)
+    return []
+
+def save_actions():
+    with open(ACTIONS_FILE, "w") as f:
+        json.dump(actions, f, indent=2)
+
+def load_mappings():
+    if os.path.exists(MAPPINGS_FILE):
+        with open(MAPPINGS_FILE, "r") as f:
+            return json.load(f)
+    return []
+
+def save_mappings():
+    with open(MAPPINGS_FILE, "w") as f:
+        json.dump(mappings, f, indent=2)
+
 # --- In-memory Actions and Mappings ---
-actions = []  # List of dicts: {"name": ...}
-mappings = []  # List of dicts: {"sign": ..., "action": ...}
+actions = load_actions()  # List of dicts: {"name": ...}
+mappings = load_mappings()  # List of dicts: {"sign": ..., "action": ...}
+
+# Update all places where actions/mappings are modified to save to disk
 
 def add_action():
-    name = simpledialog.askstring("Add Action", "Enter action name:")
-    if name:
-        actions.append({"name": name})
+    dialog = tk.Toplevel(root)
+    dialog.title("Add Action")
+    dialog.geometry("400x400")
+    dialog.grab_set()
+
+    tk.Label(dialog, text="Action Name:").pack(anchor="w", padx=10, pady=(10, 0))
+    name_var = tk.StringVar()
+    name_entry = tk.Entry(dialog, textvariable=name_var)
+    name_entry.pack(fill=tk.X, padx=10, pady=(0, 10))
+
+    tk.Label(dialog, text="Action Type:").pack(anchor="w", padx=10, pady=(0, 0))
+    type_var = tk.StringVar(value="macro")
+    type_combo = ttk.Combobox(dialog, textvariable=type_var, state="readonly", values=["macro", "log", "function"])
+    type_combo.pack(fill=tk.X, padx=10, pady=(0, 10))
+
+    # Frames for each type
+    macro_frame = tk.Frame(dialog)
+    log_frame = tk.Frame(dialog)
+    func_frame = tk.Frame(dialog)
+
+    # Macro
+    tk.Label(macro_frame, text="Key Combination (e.g. ctrl+shift+s):").pack(anchor="w", padx=0, pady=(0, 0))
+    macro_keys_var = tk.StringVar()
+    macro_entry = tk.Entry(macro_frame, textvariable=macro_keys_var)
+    macro_entry.pack(fill=tk.X, padx=0, pady=(0, 10))
+
+    # Log
+    tk.Label(log_frame, text="Logfile Name:").pack(anchor="w", padx=0, pady=(0, 0))
+    log_file_var = tk.StringVar()
+    log_file_entry = tk.Entry(log_frame, textvariable=log_file_var)
+    log_file_entry.pack(fill=tk.X, padx=0, pady=(0, 10))
+    tk.Label(log_frame, text="Select Signs to Track:").pack(anchor="w", padx=0, pady=(0, 0))
+    log_signs_listbox = tk.Listbox(log_frame, selectmode=tk.MULTIPLE, height=5)
+    for sign in gesture_dict.keys():
+        log_signs_listbox.insert(tk.END, sign)
+    log_signs_listbox.pack(fill=tk.X, padx=0, pady=(0, 10))
+    tk.Label(log_frame, text="Threshold (applies to all selected signs):").pack(anchor="w", padx=0, pady=(0, 0))
+    log_threshold_var = tk.StringVar(value="1")
+    log_threshold_entry = tk.Entry(log_frame, textvariable=log_threshold_var)
+    log_threshold_entry.pack(fill=tk.X, padx=0, pady=(0, 10))
+
+    # Function
+    tk.Label(func_frame, text="Python Function (def ...):").pack(anchor="w", padx=0, pady=(0, 0))
+    func_text = tk.Text(func_frame, height=8)
+    func_text.pack(fill=tk.BOTH, padx=0, pady=(0, 10), expand=True)
+
+    # Show/hide frames
+    def show_type_frame(*args):
+        macro_frame.pack_forget()
+        log_frame.pack_forget()
+        func_frame.pack_forget()
+        if type_var.get() == "macro":
+            macro_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+        elif type_var.get() == "log":
+            log_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+        elif type_var.get() == "function":
+            func_frame.pack(fill=tk.BOTH, padx=10, pady=(0, 10), expand=True)
+    type_var.trace_add("write", show_type_frame)
+    show_type_frame()
+
+    def on_ok():
+        name = name_var.get().strip()
+        if not name:
+            messagebox.showerror("Error", "Action name required.", parent=dialog)
+            return
+        global actions
+        actions = load_actions()  # Reload from disk before modifying
+        if any(a["name"] == name for a in actions):
+            messagebox.showerror("Error", "Action name must be unique.", parent=dialog)
+            return
+        action_type = type_var.get()
+        params = {}
+        if action_type == "macro":
+            keys = macro_keys_var.get().strip()
+            if not keys:
+                messagebox.showerror("Error", "Key combination required.", parent=dialog)
+                return
+            params["keys"] = keys
+        elif action_type == "log":
+            logfile = log_file_var.get().strip()
+            if not logfile:
+                messagebox.showerror("Error", "Logfile name required.", parent=dialog)
+                return
+            selected = [log_signs_listbox.get(i) for i in log_signs_listbox.curselection()]
+            if not selected:
+                messagebox.showerror("Error", "Select at least one sign to track.", parent=dialog)
+                return
+            try:
+                threshold = int(log_threshold_var.get())
+            except ValueError:
+                messagebox.showerror("Error", "Threshold must be an integer.", parent=dialog)
+                return
+            params["logfile"] = logfile
+            params["signs"] = selected
+            params["threshold"] = threshold
+        elif action_type == "function":
+            code = func_text.get("1.0", tk.END).strip()
+            if not code:
+                messagebox.showerror("Error", "Function code required.", parent=dialog)
+                return
+            params["code"] = code
+        actions.append({"name": name, "type": action_type, "params": params})
         update_action_listbox()
         update_mapping_dropdowns()
+        save_actions()
+        dialog.destroy()
+
+    ok_btn = ttk.Button(dialog, text="OK", command=on_ok)
+    ok_btn.pack(side=tk.RIGHT, padx=10, pady=10)
+    cancel_btn = ttk.Button(dialog, text="Cancel", command=dialog.destroy)
+    cancel_btn.pack(side=tk.RIGHT, padx=0, pady=10)
 
 def delete_action():
+    global actions
+    actions = load_actions()  # Reload from disk before modifying
     sel = action_listbox.curselection()
     if sel:
         idx = sel[0]
@@ -263,6 +453,7 @@ def delete_action():
         update_action_listbox()
         update_mapping_dropdowns()
         update_mapping_listbox()
+        save_actions()
 
 def update_action_listbox():
     action_listbox.delete(0, tk.END)
@@ -283,19 +474,23 @@ def update_mapping_listbox():
         mapping_listbox.insert(tk.END, f"{m['sign']} → {m['action']}")
 
 def map_sign_to_action():
+    global mappings
+    mappings = load_mappings()  # Reload from disk before modifying
     sign = sign_var.get()
     action = action_var.get()
     if sign and action:
-        global mappings
         mappings = [m for m in mappings if m["sign"] != sign]
         mappings.append({"sign": sign, "action": action})
         update_mapping_listbox()
+        save_mappings()
 
 def unmap_sign():
-    sign = sign_var.get()
     global mappings
+    mappings = load_mappings()  # Reload from disk before modifying
+    sign = sign_var.get()
     mappings = [m for m in mappings if m["sign"] != sign]
     update_mapping_listbox()
+    save_mappings()
 
 # --- Tkinter UI ---
 root = tk.Tk()
@@ -382,6 +577,8 @@ def update_all_lists():
     update_mapping_dropdowns()
     update_mapping_listbox()
 
+print("Loaded actions:", actions)
+print("Loaded mappings:", mappings)
 update_all_lists()
 
 root.after(100, poll_recognition_queue)

@@ -1,0 +1,10 @@
+[
+  {
+    "sign": "palmOpen",
+    "action": "pause"
+  },
+  {
+    "sign": "one",
+    "action": "sendMail"
+  }
+]

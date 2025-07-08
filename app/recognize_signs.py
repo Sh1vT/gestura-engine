@@ -7,7 +7,7 @@ import os
 from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
 
-GESTURE_FILE = "backend/gestures.json"
+GESTURE_FILE = "data/gestures.json"
 frame_sequence = ["start", "mid1", "mid2", "end"]
 keypoints_to_check = [0, 1, 4, 5, 8, 9, 12, 13, 16, 17, 20]
 COOLDOWN_TIME = 0.5

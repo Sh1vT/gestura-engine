@@ -14,7 +14,7 @@ def normalize_landmarks(landmarks):
     scale = max(max_x - min_x, max_y - min_y)
     return centered_landmarks / scale if scale > 0 else centered_landmarks
 
-GESTURE_FILE = "backend/gestures.json"
+GESTURE_FILE = "data/gestures.json"
 keypoints_to_check = [0, 1, 4, 5, 8, 9, 12, 13, 16, 17, 20]
 
 if len(sys.argv) < 2:

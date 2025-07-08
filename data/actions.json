@@ -1,0 +1,41 @@
+[
+  {
+    "name": "switch",
+    "type": "macro",
+    "params": {
+      "keys": "alt+tab"
+    }
+  },
+  {
+    "name": "log one counts",
+    "type": "log",
+    "params": {
+      "logfile": "file.txt",
+      "signs": [
+        "one"
+      ],
+      "threshold": 1
+    }
+  },
+  {
+    "name": "pause",
+    "type": "macro",
+    "params": {
+      "keys": "k"
+    }
+  },
+  {
+    "name": "functionTest",
+    "type": "function",
+    "params": {
+      "code": "print(f\"Custom function executed for sign: {sign}\")"
+    }
+  },
+  {
+    "name": "sendMail",
+    "type": "function",
+    "params": {
+      "code": "import smtplib\nfrom email.mime.text import MIMEText\n\nsender_email = \"watashiwatet@gmail.com\"\npassword = \"sjcbxudofpxivixk\"\nrecipient_email = \"ericjhonson09@gmail.com\"\n\nsmtp_server = \"smtp.gmail.com\"\nsmtp_port = 587\n\nsubject = f\"Sign Detected: {sign}\"\nbody = f\"Automated message generated when sign: '{sign}' was detected by Gestura.\"\n\nmsg = MIMEText(body)\nmsg[\"Subject\"] = subject\nmsg[\"From\"] = sender_email\nmsg[\"To\"] = recipient_email\n\ntry:\n    server = smtplib.SMTP(smtp_server, smtp_port)\n    server.starttls()\n    server.login(sender_email, password)\n    server.sendmail(sender_email, recipient_email, msg.as_string())\n    server.quit()\nexcept Exception as e:\n    print(\"Failed to send email:\", e)"
+    }
+  }
+]
