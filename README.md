@@ -1,6 +1,6 @@
 # Gestura Engine
 
-**Gestura Engine** is a modular, GUI-based Indian Sign Language (ISL) interpreter and gesture manager. It allows you to record, recognize, map, and manage sign gestures, and supports modular import/export of gesture sets. It aims for lower-end devices and uses algorithmic flow of FastDTW with keyframe sequencing and Mediapipe, staying away from heavier alternatives like CNN.  
+**Gestura Engine** is a modular, GUI-based Sign interpreter and gesture manager. It allows you to record, recognize, map, and manage sign gestures, and supports modular import/export of gesture sets. It aims for lower-end devices and uses algorithmic flow of FastDTW with keyframe sequencing and Mediapipe, staying away from heavier alternatives like CNN.  
 
 ---
 
