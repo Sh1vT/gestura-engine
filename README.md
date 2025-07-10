@@ -67,15 +67,20 @@ python3 app/gestura_gui.py
 - Detected signs will appear in the list.
 
 ### Sign Manager
+
+[![addSign](https://i.ibb.co/CKXCt6dL/addSign.gif)](https://ibb.co/YBKnWX9g)
 - **All Signs**: View all available signs (from main data and enabled modules).
 - **Add Sign**: Record a new sign using your webcam.
 - **Delete Sign**: Remove a sign from your data.
 
 ### Actions
+[![add-Action](https://i.ibb.co/FLDj42my/add-Action.gif)](https://ibb.co/Q3K1vLpT)
 - **Add Action**: Create a new action (macro, log, or Python function).
 - **Delete Action**: Remove an action.
 
 ### Mappings
+[![mapped](https://i.ibb.co/HTBKGjSn/mapped.gif)](https://ibb.co/xqX2zNkJ)
+[![video-Module-In-Action](https://i.ibb.co/Cp7NDgYX/video-Module-In-Action.gif)](https://ibb.co/V0Sr5Rzh)
 - Map signs to actions.
 - Unmap signs as needed.
 
