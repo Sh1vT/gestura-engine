@@ -36,7 +36,7 @@
 ## Installation
 1. **Clone the repository:**
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/Sh1vT/gestura-engine.git
    cd gestura-engine
    ```
 2. **Set up a virtual environment (recommended):**
@@ -51,7 +51,7 @@
 4. **Install system dependencies:**
    - Python 3.7+
    - OpenCV (with webcam support)
-   - [MediaPipe](https://google.github.io/mediapipe/)
+   - [MediaPipe](https://github.com/google-ai-edge/mediapipe)
 
 ---
 
@@ -155,9 +155,9 @@ gestura-engine/
 ---
 
 ## Troubleshooting
-- **No webcam detected**: Ensure your webcam is connected and accessible by OpenCV.
-- **No signs in list**: Make sure you have signs in `data/gestures.json` or enabled modules.
-- **Module checkboxes not working**: Ensure you have at least one module folder in `modules/`.
+- **No webcam detected**: Ensure your webcam is connected and accessible by OpenCV. Also ensure the correct camera index for your device if you have multiple cameras.
+- **No signs in list**: Make sure you have signs in `data/gestures.json`. Otherwise, create some signs or get a relevant module for your uses.
+- **Module checkboxes not working**: Ensure you have at least one module folder in `modules/`. Checkboxes dont appear in absence of modules.
 
 ---
 
