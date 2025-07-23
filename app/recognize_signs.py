@@ -6,28 +6,13 @@ import time
 import os
 from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
+from app.utils import load_gesture_data
 
 GESTURE_FILE = "data/gestures.json"
 frame_sequence = ["start", "mid1", "mid2", "end"]
 keypoints_to_check = [0, 1, 4, 5, 8, 9, 12, 13, 16, 17, 20]
 COOLDOWN_TIME = 0.5
 STAGE_TIMEOUT = 5
-
-def load_gesture_data(file_path):
-    if not os.path.exists(file_path):
-        return {}
-    with open(file_path, "r") as f:
-        gesture_dict = json.load(f)
-        gesture_dict = {
-            k: {
-                "start": np.array(v["start"], dtype=np.float32),
-                "mid1": np.array(v["mid1"], dtype=np.float32),
-                "mid2": np.array(v["mid2"], dtype=np.float32),
-                "end": np.array(v["end"], dtype=np.float32),
-            }
-            for k, v in gesture_dict.items()
-        }
-    return gesture_dict
 
 def normalize_landmarks(landmarks):
     min_x, min_y, _ = np.min(landmarks, axis=0)

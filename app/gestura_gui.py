@@ -12,35 +12,12 @@ import pyautogui
 import shutil
 import zipfile
 import tempfile
+from app.utils import load_gesture_data, save_gesture_data, load_actions, save_actions, load_mappings, save_mappings
 recognition_proc = None
 recognition_queue = queue.Queue()
 recognition_thread = None
 
 # --- Gesture Logic ---
-def load_gesture_data(file_path):
-    if not os.path.exists(file_path):
-        return {}
-    with open(file_path, "r") as f:
-        gesture_dict = json.load(f)
-        gesture_dict = {
-            k: {
-                "start": np.array(v["start"], dtype=np.float32),
-                "mid1": np.array(v["mid1"], dtype=np.float32),
-                "mid2": np.array(v["mid2"], dtype=np.float32),
-                "end": np.array(v["end"], dtype=np.float32),
-            }
-            for k, v in gesture_dict.items()
-        }
-    return gesture_dict
-
-def save_gesture_data(file_path, gesture_dict):
-    # Convert numpy arrays to lists for JSON serialization
-    serializable = {
-        k: {frame: v[frame].tolist() for frame in v} for k, v in gesture_dict.items()
-    }
-    with open(file_path, "w") as f:
-        json.dump(serializable, f, indent=2)
-
 def normalize_landmarks(landmarks):
     min_x, min_y, _ = np.min(landmarks, axis=0)
     max_x, max_y, _ = np.max(landmarks, axis=0)
@@ -62,7 +39,7 @@ def add_sign():
     # Launch record_sign.py as a subprocess
     try:
         result = subprocess.run([
-            "python3", "app/record_sign.py", sign_name
+            "python3", "-u", "-m", "app.record_sign", sign_name
         ], check=True)
         print("[Main App] Subprocess for sign recording finished.")
         import time
@@ -195,7 +172,7 @@ def start_recognition():
     recog_stop_button.config(state=tk.NORMAL)
     try:
         recognition_proc = subprocess.Popen([
-            "python3", "-u", "app/recognize_signs.py"
+            "python3", "-u", "-m", "app.recognize_signs"
         ], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
         print("[Main App] Recognition subprocess started.")
         # Start a thread to read stdout
@@ -383,29 +360,18 @@ running = False
 camera_in_use = False
 
 # --- Persistent Actions and Mappings ---
-def load_actions():
-    if os.path.exists(ACTIONS_FILE):
-        with open(ACTIONS_FILE, "r") as f:
-            return json.load(f)
-    return []
+actions = load_actions(ACTIONS_FILE)  # List of dicts: {"name": ...}
+mappings = load_mappings(MAPPINGS_FILE)  # List of dicts: {"sign": ..., "action": ...}
 
-def save_actions():
-    with open(ACTIONS_FILE, "w") as f:
-        json.dump(actions, f, indent=2)
+def save_actions_wrapper():
+    save_actions(ACTIONS_FILE, actions)
 
-def load_mappings():
-    if os.path.exists(MAPPINGS_FILE):
-        with open(MAPPINGS_FILE, "r") as f:
-            return json.load(f)
-    return []
-
-def save_mappings():
-    with open(MAPPINGS_FILE, "w") as f:
-        json.dump(mappings, f, indent=2)
+def save_mappings_wrapper():
+    save_mappings(MAPPINGS_FILE, mappings)
 
 # --- In-memory Actions and Mappings ---
-actions = load_actions()  # List of dicts: {"name": ...}
-mappings = load_mappings()  # List of dicts: {"sign": ..., "action": ...}
+# actions = load_actions()  # List of dicts: {"name": ...}
+# mappings = load_mappings()  # List of dicts: {"sign": ..., "action": ...}
 
 # Update all places where actions/mappings are modified to save to disk
 
@@ -476,7 +442,7 @@ def add_action():
             messagebox.showerror("Error", "Action name required.", parent=dialog)
             return
         global actions
-        actions = load_actions()  # Reload from disk before modifying
+        actions = load_actions(ACTIONS_FILE)  # Reload from disk before modifying
         if any(a["name"] == name for a in actions):
             messagebox.showerror("Error", "Action name must be unique.", parent=dialog)
             return
@@ -514,7 +480,7 @@ def add_action():
         actions.append({"name": name, "type": action_type, "params": params})
         update_action_listbox()
         update_mapping_dropdowns()
-        save_actions()
+        save_actions_wrapper()
         dialog.destroy()
 
     ok_btn = ttk.Button(dialog, text="OK", command=on_ok)
@@ -524,7 +490,7 @@ def add_action():
 
 def delete_action():
     global actions
-    actions = load_actions()  # Reload from disk before modifying
+    actions = load_actions(ACTIONS_FILE)  # Reload from disk before modifying
     sel = action_listbox.curselection()
     if sel:
         idx = sel[0]
@@ -554,22 +520,22 @@ def update_mapping_listbox():
 
 def map_sign_to_action():
     global mappings
-    mappings = load_mappings()  # Reload from disk before modifying
+    mappings = load_mappings(MAPPINGS_FILE)  # Reload from disk before modifying
     sign = sign_var.get()
     action = action_var.get()
     if sign and action:
         mappings = [m for m in mappings if m["sign"] != sign]
         mappings.append({"sign": sign, "action": action})
         update_mapping_listbox()
-        save_mappings()
+        save_mappings_wrapper()
 
 def unmap_sign():
     global mappings
-    mappings = load_mappings()  # Reload from disk before modifying
+    mappings = load_mappings(MAPPINGS_FILE)  # Reload from disk before modifying
     sign = sign_var.get()
     mappings = [m for m in mappings if m["sign"] != sign]
     update_mapping_listbox()
-    save_mappings()
+    save_mappings_wrapper()
 
 # --- Module Import/Export UI ---
 def export_selected_modules():

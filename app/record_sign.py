@@ -4,15 +4,7 @@ import mediapipe as mp
 import json
 import sys
 import os
-
-def normalize_landmarks(landmarks):
-    min_x, min_y, _ = np.min(landmarks, axis=0)
-    max_x, max_y, _ = np.max(landmarks, axis=0)
-    center_x = (min_x + max_x) / 2
-    center_y = (min_y + max_y) / 2
-    centered_landmarks = landmarks - np.array([center_x, center_y, 0])
-    scale = max(max_x - min_x, max_y - min_y)
-    return centered_landmarks / scale if scale > 0 else centered_landmarks
+from app.utils import normalize_landmarks
 
 GESTURE_FILE = "data/gestures.json"
 keypoints_to_check = [0, 1, 4, 5, 8, 9, 12, 13, 16, 17, 20]

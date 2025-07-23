@@ -6,5 +6,9 @@
   {
     "sign": "palmOpen",
     "action": "switch"
+  },
+  {
+    "sign": "ok",
+    "action": "close"
   }
 ]

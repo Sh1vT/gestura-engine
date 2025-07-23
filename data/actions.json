@@ -12,5 +12,12 @@
     "params": {
       "keys": "f"
     }
+  },
+  {
+    "name": "close",
+    "type": "macro",
+    "params": {
+      "keys": "alt+f4"
+    }
   }
 ]
