@@ -2,6 +2,8 @@
 
 **Gestura Engine** is a modular, GUI-based Sign interpreter and gesture manager. It allows you to record, recognize, map, and manage sign gestures, and supports modular import/export of gesture sets. It aims for lower-end devices and uses algorithmic flow of FastDTW with keyframe sequencing and Mediapipe, staying away from heavier alternatives like CNN.  
 
+Earlier iterations offered a client-server architecture in distributions. They can be tried out here: https://github.com/Sh1vT/gestura-algo/tree/main/others
+
 ---
 
 ## Table of Contents
